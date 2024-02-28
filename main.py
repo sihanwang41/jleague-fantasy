@@ -29,9 +29,9 @@ class GameWeekPlayer:
         self.gw_score: int = gw_score
 
 class GameWeekPlayerPoints:
-    def __init__(self, gw: str):
+    def __init__(self, gameweek: str):
         self.players: Dict[PLAYER_ID, GameWeekPlayer] = {}
-        self.gw = gw
+        self.gameweek = gameweek
 
     @classmethod
     def from_xml(cls, data: str):
@@ -40,10 +40,10 @@ class GameWeekPlayerPoints:
         data format is xml from fansaka public api.
         """
         xml_data = ET.fromstring(data)
-        game_week = xml_data[0][0].text
-        assert int(game_week)
+        gameweek = xml_data[0][0].text
+        assert int(gameweek)
 
-        game_week_player_points = GameWeekPlayerPoints(game_week)
+        game_week_player_points = GameWeekPlayerPoints(gameweek)
 
         for player in xml_data[1]:
             id = player[0].text
@@ -62,6 +62,7 @@ class GameWeekRequest(BaseModel):
 class GameWeekResponse(BaseModel):
     players_score: List[Tuple[PLAYER_NAME, int]]= []
     total_scores: Union[None, int] = None
+    gameweek: Union[None, str] = None
 
 @app.get("/score", response_model=GameWeekResponse)
 async def get_score(req: GameWeekRequest):
@@ -75,5 +76,6 @@ async def get_score(req: GameWeekRequest):
         resp.players_score.append((game_week_player_points.players[player_id].name, 
                                    game_week_player_points.players[player_id].gw_score))
     resp.total_scores = sum([score for _, score in resp.players_score])
+    resp.gameweek = game_week_player_points.gameweek
     return resp
 
