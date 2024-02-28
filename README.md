@@ -13,3 +13,8 @@ curl -X 'GET' \
   "players": ["J34531", "J45270"]
 }'
 ```
+
+response
+```shell
+{"players_score":[["菅野 孝憲",14],["阿波加 俊太",0]],"total_scores":14}
+```
