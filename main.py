@@ -14,7 +14,7 @@ PLAYER_ID = str
 PLAYER_NAME = str
 REDIS_URL="rediss://red-cngeb3fsc6pc73dno3dg:tNIy8bGlSQXmmzM4BSANLKREd8h4OieI@oregon-redis.render.com:6379"
 # Only have 3 players to play the game.
-VALID_USER_IDS = ["0", "1", "2"]
+VALID_USER_IDS = ["test", "0", "1", "2"]
 
 """
 curl -X 'GET' \
@@ -26,7 +26,7 @@ curl -X 'GET' \
 }'
 
 curl -X 'POST'   'http://127.0.0.1:8000/gameweek_roaster'   -H 'accept: application/json'   -H 'Content-Type: application/json'   -d '{
-  "user_id": "0", "add_players": [
+  "user_id": "test", "add_players": [
     {"id": "J494D1"}, {"id": "J439F0"}, {"id": "J467R1"}, 
     {"id": "J468N0"}, {"id": "J456B1"}, {"id": "J477N0"}, {"id": "J44AL0"},
     {"id": "J499H0"}, {"id": "J46A71"}, {"id": "J47251"}, {"id": "J50970"}], "gameweek": "2"}'
@@ -44,9 +44,10 @@ class GameWeekPlayer(BaseModel):
     id: str
     name: str
     position: str
-    gw_score: int
     cur_price: int
-    next_price: int
+    # None means not avaiable
+    gw_score: Union[int, None]
+    next_price: Union[int, None]
 
 class GameWeekPlayerSummary:
     def __init__(self, gameweek: str):
@@ -69,9 +70,13 @@ class GameWeekPlayerSummary:
             id = player[0].text
             position = player[2].text
             name = player[3].text
-            gw_score = int(player[7][8].text)
             cur_price = int(player[5].text)
-            next_price = int(player[7][0].text)
+            gw_score = None
+            next_price = None
+            if len(player) > 7:
+                # Result is ready, otherwise set score and next_price to None
+                gw_score = int(player[7][8].text)
+                next_price = int(player[7][0].text)
 
             game_week_player_summary.players[id] = GameWeekPlayer(id=id, name=name, position=position, gw_score=gw_score, cur_price=cur_price, next_price=next_price)
 
@@ -86,6 +91,7 @@ class GameWeekResponse(BaseModel):
     players_score: List[Tuple[PLAYER_NAME, int]]= []
     total_scores: Union[None, int] = None
     gameweek: Union[None, str] = None
+    message: str = None
 
 @app.get("/score", response_model=GameWeekResponse)
 async def get_score(req: GameWeekRequest):
@@ -98,6 +104,11 @@ async def get_score(req: GameWeekRequest):
     for player_id in req.players:
         resp.players_score.append((game_week_player_summary.players[player_id].name, 
                                    game_week_player_summary.players[player_id].gw_score))
+        if game_week_player_summary.players[player_id].gw_score is None:
+            resp = GameWeekResponse()
+            resp.message = f"Player {game_week_player_summary.players[player_id].name} doesn't have score, please try again later."
+            return resp
+            
     resp.total_scores = sum([score for _, score in resp.players_score])
     resp.gameweek = game_week_player_summary.gameweek
     return resp
@@ -122,14 +133,16 @@ class GameWeekRoasterResponse(BaseModel):
     total_value: int = 0
 
 
-def _construct_roaster_response(user_id: str, all_players: dict, game_week_player_summary: GameWeekPlayerSummary) -> GameWeekRoasterResponse:
+def _construct_roaster_response(user_id: str, gameweek: str, all_players: dict, game_week_player_summary: GameWeekPlayerSummary) -> GameWeekRoasterResponse:
     resp = GameWeekRoasterResponse(user_id=user_id)
-    print("all players: ", all_players)
     for player_id in all_players:
         player = SelectedPlayer(id=player_id, is_substitute=all_players[player_id])
         player.name = game_week_player_summary.players[player_id].name
         player.position = game_week_player_summary.players[player_id].position
-        player.price = game_week_player_summary.players[player_id].next_price
+        if gameweek == game_week_player_summary.gameweek:
+            player.price = game_week_player_summary.players[player_id].cur_price
+        else:
+            player.price = game_week_player_summary.players[player_id].next_price
         resp.players.append(player)
         resp.total_value += player.price
     return resp
@@ -141,7 +154,7 @@ async def update_roaster(req: GameWeekRoasterRequest):
     game_week_player_summary = GameWeekPlayerSummary.from_xml(response.content)
 
     assert req.user_id in VALID_USER_IDS
-    assert int(req.gameweek) == int(game_week_player_summary.gameweek) + 1
+    assert int(req.gameweek) == int(game_week_player_summary.gameweek) + 1 or int(req.gameweek) == int(game_week_player_summary.gameweek)
 
     resp = GameWeekRoasterResponse(user_id=req.user_id)
 
@@ -161,7 +174,7 @@ async def update_roaster(req: GameWeekRoasterRequest):
         all_players.pop(player, None)
 
 
-    resp = _construct_roaster_response(req.user_id, all_players, game_week_player_summary)
+    resp = _construct_roaster_response(req.user_id, req.gameweek, all_players, game_week_player_summary)
 
     redis_client.set(redis_key, json.dumps(all_players))
 
@@ -175,7 +188,7 @@ async def update_roaster(gameweek: str, user_id: str):
     game_week_player_summary = GameWeekPlayerSummary.from_xml(response.content)
 
     assert user_id in VALID_USER_IDS
-    assert int(gameweek) == int(game_week_player_summary.gameweek) + 1
+    assert int(gameweek) == int(game_week_player_summary.gameweek) + 1 or int(gameweek) == int(game_week_player_summary.gameweek)
 
     redis_key = f"{gameweek}_{user_id}"
     redis_client = get_redis_client()
@@ -185,6 +198,6 @@ async def update_roaster(gameweek: str, user_id: str):
     else:
         all_players = {}
     
-    resp = _construct_roaster_response(user_id, all_players, game_week_player_summary)
+    resp = _construct_roaster_response(user_id, gameweek, all_players, game_week_player_summary)
     
     return resp
