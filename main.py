@@ -133,7 +133,7 @@ async def update_roaster(req: GameWeekRoasterRequest):
             return resp
         
         gameweek_user_state.bank_money -= player_info.next_price
-        player = SelectedPlayer(id=player_id, is_substitute=player.is_substitute, name=player_info.name, position=player_info.position, price=player_info.next_price)
+        player = SelectedPlayer(id=player.id, is_substitute=player.is_substitute, name=player_info.name, position=player_info.position, price=player_info.next_price)
         gameweek_user_state.roaster[player.id] = player
     
     resp.players = list(gameweek_user_state.roaster.values())
