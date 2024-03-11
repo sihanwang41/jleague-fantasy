@@ -20,6 +20,7 @@ class GameWeekResponse(BaseModel):
 class UserSelectedPlayer(BaseModel):
     id: str
     is_substitute: bool = False
+    is_captain: bool = False
 
 class GameWeekRoasterRequest(BaseModel):
     user_id: str
@@ -34,6 +35,7 @@ class SelectedPlayer(BaseModel):
     name: str
     position: str
     price: int
+    is_captain: bool = False
 
 class GameWeekRoasterResponse(BaseModel):
     user_id: str
