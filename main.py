@@ -126,14 +126,15 @@ async def update_roaster(req: GameWeekRoasterRequest):
 
     for player in req.add_players:
         if player.id in gameweek_user_state.roaster:
-            continue
+            deleted_player: SelectedPlayer = gameweek_user_state.roaster.pop(player.id)
+            gameweek_user_state.bank_money += deleted_player.price
         player_info = game_week_player_summary.players[player.id]
         if gameweek_user_state.bank_money < player_info.next_price:
             resp.message = "Bank money not enough to finish buying all players"
             return resp
         
         gameweek_user_state.bank_money -= player_info.next_price
-        player = SelectedPlayer(id=player.id, is_substitute=player.is_substitute, name=player_info.name, position=player_info.position, price=player_info.next_price)
+        player = SelectedPlayer(id=player.id, is_substitute=player.is_substitute, name=player_info.name, position=player_info.position, price=player_info.next_price, is_captain=player.is_captain)
         gameweek_user_state.roaster[player.id] = player
     
     resp.players = list(gameweek_user_state.roaster.values())

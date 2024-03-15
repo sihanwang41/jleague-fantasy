@@ -21,12 +21,17 @@ class UserSelectedPlayer(BaseModel):
     id: str
     is_substitute: bool = False
     is_captain: bool = False
+    class Config:
+        extra = 'forbid'
 
 class GameWeekRoasterRequest(BaseModel):
     user_id: str
     add_players: Optional[List[UserSelectedPlayer]] = []
     delete_players: Optional[List[PLAYER_ID]] = []
     gameweek: str
+
+    class Config:
+        extra = 'forbid'
 
 # User roaster response
 class SelectedPlayer(BaseModel):
